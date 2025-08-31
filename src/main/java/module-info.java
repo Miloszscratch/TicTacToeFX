@@ -4,4 +4,6 @@ module com.milosz.podsiadly.tictactoefx {
 
     opens com.milosz.podsiadly.tictactoefx to javafx.fxml;
     exports com.milosz.podsiadly.tictactoefx;
+
+    requires java.prefs;
 }

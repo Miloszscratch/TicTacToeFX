@@ -3,17 +3,22 @@ package com.milosz.podsiadly.tictactoefx;
 import javafx.animation.PauseTransition;
 import javafx.application.Platform;
 import javafx.fxml.FXML;
+import javafx.geometry.HPos;
+import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.Node;
 import javafx.scene.control.*;
+import javafx.scene.layout.ColumnConstraints;
 import javafx.scene.layout.GridPane;
 import javafx.scene.text.Font;
 import javafx.util.Duration;
 
-import java.util.List;
 import java.util.Optional;
 import java.util.Random;
+import java.util.prefs.Preferences;
 
 public class TicTacToeController {
+
     @FXML private GridPane boardGrid;
     @FXML private Label statusLabel;
     @FXML private Label scoreLabel;
@@ -23,15 +28,16 @@ public class TicTacToeController {
     private Player player1, player2, currentPlayer;
     private boolean playerVsComputer;
     private int computerDifficultyLevel;
+    private boolean gameOver = false;
 
-    private final Random random = new Random();
     private final Button[][] cells = new Button[3][3];
-
+    private final Random rng = new Random();
     private final ScoreStore store = new ScoreStore();
+    private final Preferences prefs = Preferences.userNodeForPackage(getClass());
+
     private int pvp_p1Wins = 0, pvp_p2Wins = 0, pvp_draws = 0;
     private int pvc_pWins  = 0, pvc_cWins  = 0, pvc_draws = 0;
 
-    private boolean gameOver = false;
 
     @FXML
     private void initialize() {
@@ -41,7 +47,7 @@ public class TicTacToeController {
         pvp_p1Wins = s.pvp_p1Wins;  pvp_p2Wins = s.pvp_p2Wins;  pvp_draws = s.pvp_draws;
         pvc_pWins  = s.pvc_pWins;   pvc_cWins  = s.pvc_cWins;   pvc_draws = s.pvc_draws;
 
-        configureGameWithDialogs();
+        configureGameWithDialog();
         updateStatus();
         updateScore();
     }
@@ -50,6 +56,10 @@ public class TicTacToeController {
         boardGrid.setHgap(8);
         boardGrid.setVgap(8);
         boardGrid.setAlignment(Pos.CENTER);
+
+        ColumnConstraints wide = new ColumnConstraints();
+        wide.setHalignment(HPos.CENTER);
+        boardGrid.getColumnConstraints().setAll(wide, wide, wide);
 
         for (int r = 0; r < 3; r++) {
             for (int c = 0; c < 3; c++) {
@@ -77,7 +87,8 @@ public class TicTacToeController {
     private void disableBoard(boolean disabled) {
         for (int r = 0; r < 3; r++) {
             for (int c = 0; c < 3; c++) {
-                cells[r][c].setDisable(disabled || !cells[r][c].getText().isBlank());
+                boolean alreadyMarked = !cells[r][c].getText().isBlank();
+                cells[r][c].setDisable(disabled || alreadyMarked);
             }
         }
     }
@@ -97,14 +108,13 @@ public class TicTacToeController {
 
     @FXML
     private void onSetup() {
-        configureGameWithDialogs();
+        configureGameWithDialog();
         updateScore();
         updateStatus();
     }
 
     private void onCellClick(int row, int col) {
-        if (gameOver) return;
-        if (!board.isCellAvailable(row, col)) return;
+        if (gameOver || !board.isCellAvailable(row, col)) return;
 
         makeMoveAndAdvance(row, col);
         if (gameOver) return;
@@ -114,67 +124,6 @@ public class TicTacToeController {
             pause.setOnFinished(e -> doComputerTurn());
             pause.play();
         }
-    }
-
-    private void configureGameWithDialogs() {
-        board = new Board();
-        clearBoardUI();
-        gameOver = false;
-
-        ChoiceDialog<String> langDialog = new ChoiceDialog<>("EN", List.of("EN", "PL"));
-        langDialog.setTitle(Translations.translate("Language / Język"));
-        langDialog.setHeaderText(null);
-        langDialog.setContentText(Translations.translate("Choose language / Wybierz język:"));
-        String lang = langDialog.showAndWait().orElse("EN");
-        Translations.setLanguage(lang);
-
-        ChoiceDialog<String> modeDialog = new ChoiceDialog<>(
-                Translations.translate("Player vs Computer"),
-                Translations.translate("Player vs Computer"),
-                Translations.translate("Player vs Player")
-        );
-        modeDialog.setTitle(Translations.translate("Mode"));
-        modeDialog.setHeaderText(null);
-        modeDialog.setContentText(Translations.translate("Choose mode (1/2): "));
-        String mode = modeDialog.showAndWait().orElse(Translations.translate("Player vs Computer"));
-        playerVsComputer = mode.equals(Translations.translate("Player vs Computer"));
-
-        String name1 = promptText(Translations.translate("Enter name for Player 1 (X):"), "Player 1");
-        if (name1 == null || name1.isBlank()) name1 = "Player 1";
-        player1 = new Player(1, 'X', name1);
-
-        if (playerVsComputer) {
-            player2 = new Player(2, 'O', Translations.translate("Computer"));
-            ChoiceDialog<String> diffDialog = new ChoiceDialog<>(
-                    Translations.translate("Easy"),
-                    Translations.translate("Easy"),
-                    Translations.translate("Medium"),
-                    Translations.translate("Hard")
-            );
-            diffDialog.setTitle("Difficulty");
-            diffDialog.setHeaderText(null);
-            diffDialog.setContentText(Translations.translate("Choose difficulty level (1-3): "));
-            String pick = diffDialog.showAndWait().orElse(Translations.translate("Easy"));
-            computerDifficultyLevel = pick.equals(Translations.translate("Medium")) ? 2
-                    : pick.equals(Translations.translate("Hard")) ? 3 : 1;
-        } else {
-            String name2 = promptText(Translations.translate("Enter name for Player 2 (O):"), "Player 2");
-            if (name2 == null || name2.isBlank()) name2 = "Player 2";
-            player2 = new Player(2, 'O', name2);
-        }
-
-        currentPlayer = player1;
-        updateButtonsText();
-        updateStatus();
-    }
-
-    private String promptText(String prompt, String placeholder) {
-        TextInputDialog d = new TextInputDialog(placeholder);
-        d.setTitle("Setup");
-        d.setHeaderText(null);
-        d.setContentText(prompt);
-        Optional<String> res = d.showAndWait();
-        return res.orElse(null);
     }
 
     private void makeMoveAndAdvance(int row, int col) {
@@ -193,7 +142,8 @@ public class TicTacToeController {
 
             gameOver = true;
             disableBoard(true);
-            endGameAlert(currentPlayer.getName() + " (" + currentPlayer.getSymbol() + ") " + Translations.translate("wins!"));
+            endGameAlert(currentPlayer.getName() + " (" + currentPlayer.getSymbol() + ") " +
+                    Translations.translate("wins!"));
             return;
         }
 
@@ -235,6 +185,13 @@ public class TicTacToeController {
         updateStatus();
     }
 
+    private void persistScores() {
+        store.save(ScoreStore.Scores.of(
+                pvp_p1Wins, pvp_p2Wins, pvp_draws,
+                pvc_pWins, pvc_cWins, pvc_draws
+        ));
+    }
+
     private void updateStatus() {
         statusLabel.setText(Translations.translate("Current Player: ")
                 + currentPlayer.getName() + " (" + currentPlayer.getSymbol() + ")");
@@ -264,26 +221,17 @@ public class TicTacToeController {
         updateScore();
     }
 
-    private void persistScores() {
-        store.save(ScoreStore.Scores.of(
-                pvp_p1Wins, pvp_p2Wins, pvp_draws,
-                pvc_pWins, pvc_cWins, pvc_draws
-        ));
-    }
-
     private void endGameAlert(String message) {
         Platform.runLater(() -> {
             Alert a = new Alert(Alert.AlertType.INFORMATION);
             a.setTitle("Game Over");
             a.setHeaderText(message);
             a.setContentText("");
-
             try {
                 a.getDialogPane().getStylesheets().add(
                         TicTacToeApplication.class.getResource("app.css").toExternalForm()
                 );
             } catch (Exception ignored) { }
-
             ButtonType again = new ButtonType(Translations.translate("New Round"), ButtonBar.ButtonData.OK_DONE);
             ButtonType exit  = new ButtonType("Exit", ButtonBar.ButtonData.CANCEL_CLOSE);
             a.getButtonTypes().setAll(again, exit);
@@ -298,8 +246,6 @@ public class TicTacToeController {
             }
         });
     }
-
-    private final Random rng = new Random();
 
     private int[] getComputerMove() {
         int r, c;
@@ -378,5 +324,163 @@ public class TicTacToeController {
             }
         }
         return new int[]{0, 0};
+    }
+
+    private void configureGameWithDialog() {
+        board = new Board();
+        clearBoardUI();
+        gameOver = false;
+
+        Optional<SetupResult> res = showSetupDialog();
+        SetupResult cfg = res.orElseGet(() -> defaultSetupFromPrefs());
+
+        prefs.put("lang", cfg.language);
+        prefs.put("mode", cfg.vsComputer ? "PvC" : "PvP");
+        prefs.put("p1", cfg.p1);
+        prefs.put("p2", cfg.p2);
+        prefs.putInt("diff", cfg.difficulty);
+
+        Translations.setLanguage(cfg.language);
+        playerVsComputer = cfg.vsComputer;
+        player1 = new Player(1, 'X', cfg.p1);
+        if (playerVsComputer) {
+            player2 = new Player(2, 'O', Translations.translate("Computer"));
+            computerDifficultyLevel = cfg.difficulty;
+        } else {
+            player2 = new Player(2, 'O', cfg.p2);
+            computerDifficultyLevel = 0;
+        }
+
+        currentPlayer = player1;
+        updateButtonsText();
+        updateStatus();
+    }
+
+    private SetupResult defaultSetupFromPrefs() {
+        String lang = prefs.get("lang", "EN");
+        boolean vsComp = !prefs.get("mode", "PvC").equals("PvP");
+        String p1 = prefs.get("p1", "Player 1");
+        String p2 = prefs.get("p2", "Player 2");
+        int diff = prefs.getInt("diff", 1);
+        return new SetupResult(lang, vsComp, p1, p2, diff);
+    }
+
+    private static final class SetupResult {
+        final String language;
+        final boolean vsComputer;
+        final String p1, p2;
+        final int difficulty;
+
+        SetupResult(String language, boolean vsComputer, String p1, String p2, int difficulty) {
+            this.language = language == null ? "EN" : language;
+            this.vsComputer = vsComputer;
+            this.p1 = (p1 == null || p1.isBlank()) ? "Player 1" : p1.trim();
+            this.p2 = (p2 == null || p2.isBlank()) ? "Player 2" : p2.trim();
+            this.difficulty = Math.min(3, Math.max(1, difficulty));
+        }
+    }
+
+    private Optional<SetupResult> showSetupDialog() {
+        Dialog<SetupResult> dialog = new Dialog<>();
+        dialog.setTitle(Translations.translate("Setup"));
+        dialog.setHeaderText(Translations.translate("Game Preferences"));
+
+        ButtonType ok = new ButtonType("OK", ButtonBar.ButtonData.OK_DONE);
+        ButtonType cancel = new ButtonType(Translations.translate("Cancel"), ButtonBar.ButtonData.CANCEL_CLOSE);
+        dialog.getDialogPane().getButtonTypes().addAll(ok, cancel);
+
+        try {
+            dialog.getDialogPane().getStylesheets().add(
+                    TicTacToeApplication.class.getResource("app.css").toExternalForm()
+            );
+            dialog.getDialogPane().getStyleClass().add("setup-dialog");
+        } catch (Exception ignored) {}
+
+        GridPane gp = new GridPane();
+        gp.setHgap(12);
+        gp.setVgap(12);
+        gp.setPadding(new Insets(14, 16, 16, 16));
+        dialog.getDialogPane().setContent(gp);
+
+        Label langHdr = new Label(Translations.translate("Language"));
+        langHdr.getStyleClass().add("section-title");
+
+        Label modeHdr = new Label(Translations.translate("Mode"));
+        modeHdr.getStyleClass().add("section-title");
+
+        Label playersHdr = new Label(Translations.translate("Players"));
+        playersHdr.getStyleClass().add("section-title");
+
+        Label diffHdr = new Label(Translations.translate("Difficulty"));
+        diffHdr.getStyleClass().add("section-title");
+
+        ComboBox<String> langBox = new ComboBox<>();
+        langBox.getItems().addAll("EN", "PL");
+        langBox.getSelectionModel().select(prefs.get("lang", "EN"));
+
+        ToggleGroup modeGroup = new ToggleGroup();
+        ToggleButton pvcBtn = new ToggleButton(Translations.translate("Player vs Computer"));
+        ToggleButton pvpBtn = new ToggleButton(Translations.translate("Player vs Player"));
+        pvcBtn.setToggleGroup(modeGroup); pvpBtn.setToggleGroup(modeGroup);
+        if (prefs.get("mode", "PvC").equals("PvP")) pvpBtn.setSelected(true); else pvcBtn.setSelected(true);
+        ToolBar modeBar = new ToolBar(pvcBtn, pvpBtn);
+        modeBar.getStyleClass().add("segmented");
+
+        TextField p1Field = new TextField(prefs.get("p1", "Player 1"));
+        p1Field.setPromptText(Translations.translate("Player 1 (X)"));
+        p1Field.getStyleClass().add("rounded");
+
+        TextField p2Field = new TextField(prefs.get("p2", "Player 2"));
+        p2Field.setPromptText(Translations.translate("Player 2 (O)"));
+        p2Field.getStyleClass().add("rounded");
+
+        ComboBox<String> diffBox = new ComboBox<>();
+        String easy = Translations.translate("Easy");
+        String medium = Translations.translate("Medium");
+        String hard = Translations.translate("Hard");
+        diffBox.getItems().addAll(easy, medium, hard);
+        int savedDiff = prefs.getInt("diff", 1);
+        diffBox.getSelectionModel().select(savedDiff == 3 ? hard : (savedDiff == 2 ? medium : easy));
+
+        int r = 0;
+        gp.add(langHdr, 0, r++, 2, 1);
+        gp.add(new Label(Translations.translate("Choose language:")), 0, r);
+        gp.add(langBox, 1, r++);
+
+        gp.add(modeHdr, 0, r++, 2, 1);
+        gp.add(modeBar, 0, r++, 2, 1);
+
+        gp.add(playersHdr, 0, r++, 2, 1);
+        gp.add(new Label(Translations.translate("Player 1 (X)")), 0, r);
+        gp.add(p1Field, 1, r++);
+        gp.add(new Label(Translations.translate("Player 2 (O)")), 0, r);
+        gp.add(p2Field, 1, r++);
+
+        gp.add(diffHdr, 0, r++, 2, 1);
+        gp.add(new Label(Translations.translate("Level")), 0, r);
+        gp.add(diffBox, 1, r++);
+
+        Runnable updateVisibility = () -> {
+            boolean isPvC = pvcBtn.isSelected();
+            p2Field.setDisable(isPvC);
+            diffBox.setDisable(!isPvC);
+        };
+        pvcBtn.selectedProperty().addListener((o, ov, nv) -> updateVisibility.run());
+        pvpBtn.selectedProperty().addListener((o, ov, nv) -> updateVisibility.run());
+        updateVisibility.run();
+
+        Node okBtn = dialog.getDialogPane().lookupButton(ok);
+        okBtn.disableProperty().bind(p1Field.textProperty().isEmpty());
+
+        dialog.setResultConverter(btn -> {
+            if (btn != ok) return null;
+            String lang = langBox.getValue();
+            boolean vsComp = pvcBtn.isSelected();
+            String diff = diffBox.getValue();
+            int level = diff == null ? 1 : (diff.equals(medium) ? 2 : (diff.equals(hard) ? 3 : 1));
+            return new SetupResult(lang, vsComp, p1Field.getText(), p2Field.getText(), level);
+        });
+
+        return dialog.showAndWait();
     }
 }
